@@ -5,10 +5,10 @@
   "scripts": {
     "format": "prettier -w .",
     "format:check": "prettier -c .",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
