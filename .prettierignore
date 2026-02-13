@@ -1,9 +1,13 @@
-dist
 node_modules
+dist
 out
 coverage
+.next
 .cache
-.forge
-broadcast
-artifacts
-cache
+.turbo
+
+# Foundry
+packages/contracts/out
+packages/contracts/cache
+packages/contracts/broadcast
+packages/contracts/lib
