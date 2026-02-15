@@ -45,10 +45,12 @@ interface IPaymentChecks {
 
     error CheckNotFound(uint256 checkId);
     error CheckNotActive(uint256 checkId, Status status);
+
     error InvalidHolder();
     error InvalidToken();
     error InvalidAmount();
     error InvalidClaimableAt(uint64 claimableAt);
+
     error NotOwner(address caller);
     error NotIssuer(address caller);
     error NotClaimableYet(uint64 claimableAt, uint64 nowTs);
@@ -77,9 +79,7 @@ interface IPaymentChecks {
     function voidPaymentCheck(uint256 checkId) external;
 
     function getPaymentCheck(uint256 checkId) external view returns (PaymentCheck memory);
-
     function getPaymentCheckStatus(uint256 checkId) external view returns (Status);
-
     function nextCheckId() external view returns (uint256);
 
     /// @notice Standard ERC721 ownerOf is required for owner-only redeem logic.
