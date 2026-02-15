@@ -34,4 +34,4 @@ export type PaymentCheckEvent =
       txHash: Hash;
     };
 
-export type PaymentCheckStatus = 'ACTIVE' | 'REDEEMED' | 'VOID';
+export type PaymentCheckStatus = 'NONE' | 'ACTIVE' | 'REDEEMED' | 'VOID';
