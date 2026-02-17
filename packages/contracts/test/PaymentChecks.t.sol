@@ -99,7 +99,13 @@ contract PaymentChecksTest {
         uint256 checkId = _mintTo(recipient, claimableAt);
 
         vm.prank(recipient);
-        vm.expectRevert(IPaymentChecks.NotClaimableYet.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentChecks.NotClaimableYet.selector,
+                claimableAt,
+                START_TS
+            )
+        );
         checks.redeemPaymentCheck(checkId);
     }
 
@@ -124,7 +130,13 @@ contract PaymentChecksTest {
         vm.warp(claimableAt + 1);
 
         vm.prank(recipient);
-        vm.expectRevert(IPaymentChecks.CheckNotActive.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentChecks.CheckNotActive.selector,
+                checkId,
+                IPaymentChecks.Status.VOID
+            )
+        );
         checks.redeemPaymentCheck(checkId);
 
         IPaymentChecks.Status st = checks.getPaymentCheckStatus(checkId);
@@ -139,7 +151,13 @@ contract PaymentChecksTest {
         vm.warp(claimableAt);
 
         vm.prank(issuer);
-        vm.expectRevert(PaymentChecks.TooLateToVoid.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PaymentChecks.TooLateToVoid.selector,
+                claimableAt,
+                claimableAt
+            )
+        );
         checks.voidPaymentCheck(checkId);
     }
 
@@ -163,7 +181,12 @@ contract PaymentChecksTest {
         uint256 checkId = _mintTo(recipient, 0);
 
         vm.prank(issuer);
-        vm.expectRevert(IPaymentChecks.NotOwner.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentChecks.NotOwner.selector,
+                issuer
+            )
+        );
         checks.redeemPaymentCheck(checkId);
     }
 
@@ -172,7 +195,12 @@ contract PaymentChecksTest {
         uint256 checkId = _mintTo(recipient, claimableAt);
 
         vm.prank(recipient);
-        vm.expectRevert(IPaymentChecks.NotIssuer.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentChecks.NotIssuer.selector,
+                recipient
+            )
+        );
         checks.voidPaymentCheck(checkId);
     }
 
@@ -201,14 +229,24 @@ contract PaymentChecksTest {
         // claimableAt in the past
         _approveFromIssuer(AMOUNT);
         vm.startPrank(issuer);
-        vm.expectRevert(IPaymentChecks.InvalidClaimableAt.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentChecks.InvalidClaimableAt.selector,
+                uint64(START_TS - 1)
+            )
+        );
         checks.mintPaymentCheck(recipient, address(token), AMOUNT, uint64(START_TS - 1), bytes32(0));
         vm.stopPrank();
     }
 
     function testNonexistentCheckReverts() public {
         vm.prank(recipient);
-        vm.expectRevert(IPaymentChecks.CheckNotFound.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPaymentChecks.CheckNotFound.selector,
+                uint256(9999)
+            )
+        );
         checks.redeemPaymentCheck(9999);
     }
 }
