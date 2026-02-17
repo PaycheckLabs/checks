@@ -125,6 +125,16 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
     /// @inheritdoc IPaymentChecks
     function nextCheckId() external view returns (uint256) {
         return _nextId;
+
+    /// @inheritdoc IPaymentChecks
+    function ownerOf(uint256 tokenId)
+        public
+        view
+        override(ERC721, IPaymentChecks)
+        returns (address owner)
+    {
+        return ERC721.ownerOf(tokenId);
+
     }
 
     function _baseURI() internal view override returns (string memory) {
