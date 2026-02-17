@@ -114,7 +114,7 @@ abstract contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Er
             revert ERC721InvalidApprover(_msgSender());
         }
 
-        _approve(to, tokenId);
+        _approve(to, tokenId, _msgSender());
     }
 
     /**
