@@ -15,7 +15,7 @@ interface IPaymentChecks {
         uint256 amount;
         uint64 createdAt;
         uint64 claimableAt;
-        bytes32 reference;
+        bytes32 referenceId;
         Status status;
     }
 
@@ -26,7 +26,7 @@ interface IPaymentChecks {
         address token,
         uint256 amount,
         uint64 claimableAt,
-        bytes32 reference
+        bytes32 referenceId
     );
 
     event PaymentCheckRedeemed(
@@ -60,17 +60,19 @@ interface IPaymentChecks {
         address token,
         uint256 amount,
         uint64 claimableAt,
-        bytes32 reference
+        bytes32 referenceId
     ) external returns (uint256 checkId);
 
     function redeemPaymentCheck(uint256 checkId) external;
 
-    /// @dev NFT is never burned. 
+    /// @dev NFT is never burned.
     /// After VOID, redeem must be impossible.
     function voidPaymentCheck(uint256 checkId) external;
 
     function getPaymentCheck(uint256 checkId) external view returns (PaymentCheck memory);
+
     function getPaymentCheckStatus(uint256 checkId) external view returns (Status);
+
     function nextCheckId() external view returns (uint256);
 
     function ownerOf(uint256 tokenId) external view returns (address owner);

@@ -2,10 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {IPaymentChecks} from "./IPaymentChecks.sol";
-
 import {ERC721} from "./vendor/openzeppelin/token/ERC721/ERC721.sol";
 import {ReentrancyGuard} from "./vendor/openzeppelin/utils/ReentrancyGuard.sol";
-
 import {IERC20} from "./vendor/openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "./vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol";
 
@@ -24,7 +22,6 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
 
     mapping(uint256 => PaymentCheck) private _checks;
     uint256 private _nextId = 1;
-
     string private _baseTokenURI;
 
     constructor(
@@ -41,7 +38,7 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         address token,
         uint256 amount,
         uint64 claimableAt,
-        bytes32 reference
+        bytes32 referenceId
     ) external nonReentrant returns (uint256 checkId) {
         if (initialHolder == address(0)) revert InvalidHolder();
         if (token == address(0)) revert InvalidToken();
@@ -62,7 +59,7 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
             amount: amount,
             createdAt: nowTs,
             claimableAt: claimableAtTs,
-            reference: reference,
+            referenceId: referenceId,
             status: Status.ACTIVE
         });
 
@@ -72,7 +69,15 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         // Mint and transfer the NFT check to the initial holder.
         _safeMint(initialHolder, checkId);
 
-        emit PaymentCheckMinted(checkId, issuer, initialHolder, token, amount, claimableAtTs, reference);
+        emit PaymentCheckMinted(
+            checkId,
+            issuer,
+            initialHolder,
+            token,
+            amount,
+            claimableAtTs,
+            referenceId
+        );
     }
 
     /// @inheritdoc IPaymentChecks
@@ -128,6 +133,16 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
     /// @inheritdoc IPaymentChecks
     function nextCheckId() external view returns (uint256) {
         return _nextId;
+    }
+
+    /// @inheritdoc IPaymentChecks
+    function ownerOf(uint256 tokenId)
+        public
+        view
+        override(ERC721, IPaymentChecks)
+        returns (address owner)
+    {
+        return ERC721.ownerOf(tokenId);
     }
 
     function _baseURI() internal view override returns (string memory) {
