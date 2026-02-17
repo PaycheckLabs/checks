@@ -10,17 +10,20 @@ coverage/
 .turbo/
 *.tsbuildinfo
 
+# env files (ignore secrets, keep examples)
 .env
 .env.local
 .env.*
 !.env.example
+!**/.env.example
+!*.env.example
 
 logs/
 *.log
-npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+npm-debug.log*
 
 .DS_Store
 .vscode/
