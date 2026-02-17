@@ -8,7 +8,8 @@ import {IERC721Receiver} from "./IERC721Receiver.sol";
 import {IERC721Metadata} from "./extensions/IERC721Metadata.sol";
 import {Context} from "../../utils/Context.sol";
 import {Strings} from "../../utils/Strings.sol";
-import {ERC165} from "../../utils/introspection/ERC165.sol";
+import {ERC165} from "../../utils/introspection/ERC165.sol"; 
+import {IERC165} from "../../utils/introspection/IERC165.sol"; 
 import {IERC721Errors} from "../../interfaces/draft-IERC6093.sol";
 
 /**
