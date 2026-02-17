@@ -1,0 +1,35 @@
+name: contracts
+
+on:
+  push:
+    branches:
+      - ci/contracts-workflow
+    paths:
+      - "packages/contracts/**"
+      - ".github/workflows/contracts.yml"
+  pull_request:
+    paths:
+      - "packages/contracts/**"
+      - ".github/workflows/contracts.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/contracts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - run: forge --version
+      - run: forge build --sizes
+      - run: forge test -vvv
