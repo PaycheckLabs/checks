@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.24;
 
-import {IPaymentChecks} from "../../src/IPaymentChecks.sol";
+import { IPaymentChecks } from "../../src/IPaymentChecks.sol";
 
 /// @dev ERC20 that returns no data on transfer/transferFrom (USDT-style).
 contract NoReturnERC20 {
@@ -31,27 +31,34 @@ contract NoReturnERC20 {
         return true;
     }
 
-    function transfer(address to, uint256 amount) external virtual {
+    // NOTE: public (not external) so derived contracts can call super.*
+    function transfer(address to, uint256 amount) public virtual {
         _transfer(msg.sender, to, amount);
     }
 
-    function transferFrom(address from, address to, uint256 amount) external virtual {
+    // NOTE: public (not external) so derived contracts can call super.*
+    function transferFrom(address from, address to, uint256 amount) public virtual {
         uint256 allowed = allowance[from][msg.sender];
         require(allowed >= amount, "allowance");
+
         if (allowed != type(uint256).max) {
             allowance[from][msg.sender] = allowed - amount;
             emit Approval(from, msg.sender, allowance[from][msg.sender]);
         }
+
         _transfer(from, to, amount);
     }
 
     function _transfer(address from, address to, uint256 amount) internal {
         require(to != address(0), "transfer to zero");
+
         uint256 bal = balanceOf[from];
         require(bal >= amount, "balance");
+
         unchecked {
             balanceOf[from] = bal - amount;
         }
+
         balanceOf[to] += amount;
         emit Transfer(from, to, amount);
     }
@@ -97,12 +104,13 @@ contract ReentrantERC20 is NoReturnERC20 {
         checks = checks_;
     }
 
-    function transferFrom(address from, address to, uint256 amount) external override {
+    function transferFrom(address from, address to, uint256 amount) public override {
         if (!reentered && checks != address(0)) {
             reentered = true;
             // This should fail due to PaymentChecks nonReentrant.
             IPaymentChecks(checks).mintPaymentCheck(to, address(this), 1, 0, bytes32(0));
         }
+
         super.transferFrom(from, to, amount);
     }
 }
