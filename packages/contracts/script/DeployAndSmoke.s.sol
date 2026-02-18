@@ -8,9 +8,16 @@ import { PaymentChecks } from "../src/PaymentChecks.sol";
 import { MockERC20 } from "../test/MockERC20.sol";
 
 contract DeployAndSmoke is Script {
+    uint256 internal constant AMOY_CHAIN_ID = 80002;
+
     function run() external {
+        require(block.chainid == AMOY_CHAIN_ID, "Wrong chain: expected Polygon Amoy (80002)");
+
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
+
+        console2.log("Deployer:", deployer);
+        console2.log("Chain ID:", block.chainid);
 
         vm.startBroadcast(deployerKey);
 
@@ -26,14 +33,14 @@ contract DeployAndSmoke is Script {
         token.mint(deployer, 1_000_000e6);
 
         // 3) Approve and mint a Payment Check
-        uint256 amount = 100e6; // 100 tUSD
+        uint256 amount = 100e6; // 100 tUSD (6 decimals)
         token.approve(address(checks), amount);
 
         address recipient = deployer; // smoke to self
         uint64 claimableAt = uint64(block.timestamp + 1);
 
         bytes32 referenceId = keccak256(
-            abi.encodePacked("smoke:", block.chainid, address(token), recipient, amount)
+            abi.encodePacked("smoke", block.chainid, address(token), recipient, amount)
         );
 
         uint256 checkId = checks.mintPaymentCheck(
