@@ -1,24 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.24;
 
-import {IPaymentChecks} from "./IPaymentChecks.sol";
-import {ERC721} from "./vendor/openzeppelin/token/ERC721/ERC721.sol";
-import {ReentrancyGuard} from "./vendor/openzeppelin/utils/ReentrancyGuard.sol";
-import {IERC20} from "./vendor/openzeppelin/token/ERC20/IERC20.sol";
-import {SafeERC20} from "./vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import { IPaymentChecks } from "./IPaymentChecks.sol";
+import { ERC721 } from "./vendor/openzeppelin/token/ERC721/ERC721.sol";
+import { ReentrancyGuard } from "./vendor/openzeppelin/utils/ReentrancyGuard.sol";
+import { IERC20 } from "./vendor/openzeppelin/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "./vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol";
 
 /// @title PaymentChecks
 /// @notice NFT-based, ERC20-collateralized payment checks.
 /// @dev Locked v1 scope:
 /// - Checks are ERC721 NFTs and are transferable.
 /// - Owner-only redeem.
-/// - Post-dated checks can be voided by issuer before claimableAt. The NFT is never burned.
+/// - Post-dated checks can be voided by issuer before claimableAt.
+/// - The NFT is never burned.
 /// - No expiration in v1.
 contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
     using SafeERC20 for IERC20;
-
-    /// @dev Thrown when issuer tries to void after claimableAt has been reached.
-    error TooLateToVoid(uint64 claimableAt, uint64 nowTs);
 
     mapping(uint256 => PaymentCheck) private _checks;
     uint256 private _nextId = 1;
