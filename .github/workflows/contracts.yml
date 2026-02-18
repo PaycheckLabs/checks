@@ -22,6 +22,7 @@ jobs:
     defaults:
       run:
         working-directory: packages/contracts
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +30,12 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+
+      - name: Install forge-std
+        run: |
+          mkdir -p lib
+          rm -rf lib/forge-std
+          git clone --depth 1 https://github.com/foundry-rs/forge-std.git lib/forge-std
 
       - run: forge --version
       - run: forge build --sizes
