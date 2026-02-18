@@ -12,7 +12,8 @@ import {SafeERC20} from "./vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol";
 /// @dev Locked v1 scope:
 /// - Checks are ERC721 NFTs and are transferable.
 /// - Owner-only redeem.
-/// - Post-dated checks can be voided by issuer before claimableAt. The NFT is never burned.
+/// - Post-dated checks can be voided by issuer before claimableAt.
+/// - The NFT is never burned.
 /// - No expiration in v1.
 contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
     using SafeERC20 for IERC20;
@@ -32,7 +33,6 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         _baseTokenURI = baseTokenURI_;
     }
 
-    /// @inheritdoc IPaymentChecks
     function mintPaymentCheck(
         address initialHolder,
         address token,
@@ -47,7 +47,6 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         uint64 nowTs = uint64(block.timestamp);
         uint64 claimableAtTs = claimableAt == 0 ? nowTs : claimableAt;
 
-        // claimableAt must not be in the past.
         if (claimableAtTs < nowTs) revert InvalidClaimableAt(claimableAtTs);
 
         checkId = _nextId++;
@@ -63,10 +62,7 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
             status: Status.ACTIVE
         });
 
-        // Escrow collateral.
         IERC20(token).safeTransferFrom(issuer, address(this), amount);
-
-        // Mint and transfer the NFT check to the initial holder.
         _safeMint(initialHolder, checkId);
 
         emit PaymentCheckMinted(
@@ -80,7 +76,6 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         );
     }
 
-    /// @inheritdoc IPaymentChecks
     function redeemPaymentCheck(uint256 checkId) external nonReentrant {
         PaymentCheck storage pc = _requireCheck(checkId);
 
@@ -93,13 +88,11 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         if (nowTs < pc.claimableAt) revert NotClaimableYet(pc.claimableAt, nowTs);
 
         pc.status = Status.REDEEMED;
-
         IERC20(pc.token).safeTransfer(holder, pc.amount);
 
         emit PaymentCheckRedeemed(checkId, holder, pc.token, pc.amount);
     }
 
-    /// @inheritdoc IPaymentChecks
     function voidPaymentCheck(uint256 checkId) external nonReentrant {
         PaymentCheck storage pc = _requireCheck(checkId);
 
@@ -110,32 +103,27 @@ contract PaymentChecks is ERC721, ReentrancyGuard, IPaymentChecks {
         if (nowTs >= pc.claimableAt) revert TooLateToVoid(pc.claimableAt, nowTs);
 
         pc.status = Status.VOID;
-
         IERC20(pc.token).safeTransfer(pc.issuer, pc.amount);
 
         emit PaymentCheckVoided(checkId, pc.issuer, pc.token, pc.amount);
     }
 
-    /// @inheritdoc IPaymentChecks
     function getPaymentCheck(uint256 checkId) external view returns (PaymentCheck memory) {
         PaymentCheck storage pc = _checks[checkId];
         if (pc.status == Status.NONE) revert CheckNotFound(checkId);
         return pc;
     }
 
-    /// @inheritdoc IPaymentChecks
     function getPaymentCheckStatus(uint256 checkId) external view returns (Status) {
         Status st = _checks[checkId].status;
         if (st == Status.NONE) revert CheckNotFound(checkId);
         return st;
     }
 
-    /// @inheritdoc IPaymentChecks
     function nextCheckId() external view returns (uint256) {
         return _nextId;
     }
 
-    /// @inheritdoc IPaymentChecks
     function ownerOf(uint256 tokenId)
         public
         view
