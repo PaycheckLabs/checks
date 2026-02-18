@@ -53,7 +53,9 @@ interface IPaymentChecks {
 
     error NotOwner(address caller);
     error NotIssuer(address caller);
+
     error NotClaimableYet(uint64 claimableAt, uint64 nowTs);
+    error TooLateToVoid(uint64 claimableAt, uint64 nowTs);
 
     function mintPaymentCheck(
         address initialHolder,
@@ -65,14 +67,11 @@ interface IPaymentChecks {
 
     function redeemPaymentCheck(uint256 checkId) external;
 
-    /// @dev NFT is never burned.
-    /// After VOID, redeem must be impossible.
+    /// @dev NFT is never burned. After VOID, redeem must be impossible.
     function voidPaymentCheck(uint256 checkId) external;
 
     function getPaymentCheck(uint256 checkId) external view returns (PaymentCheck memory);
-
     function getPaymentCheckStatus(uint256 checkId) external view returns (Status);
-
     function nextCheckId() external view returns (uint256);
 
     function ownerOf(uint256 tokenId) external view returns (address owner);
