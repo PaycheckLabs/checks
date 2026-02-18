@@ -66,7 +66,7 @@ interface IPaymentChecks {
 
     function redeemPaymentCheck(uint256 checkId) external;
 
-    /// @dev NFT is never burned. After VOID, redeem must be impossible.
+    /// @dev NFT is never burned; after VOID, redeem must be impossible.
     function voidPaymentCheck(uint256 checkId) external;
 
     function getPaymentCheck(uint256 checkId) external view returns (PaymentCheck memory);
