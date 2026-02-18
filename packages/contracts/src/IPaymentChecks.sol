@@ -55,7 +55,6 @@ interface IPaymentChecks {
     error NotIssuer(address caller);
 
     error NotClaimableYet(uint64 claimableAt, uint64 nowTs);
-    error TooLateToVoid(uint64 claimableAt, uint64 nowTs);
 
     function mintPaymentCheck(
         address initialHolder,
