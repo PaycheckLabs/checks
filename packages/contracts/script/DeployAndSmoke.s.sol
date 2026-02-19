@@ -1,74 +1,72 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.24;
 
-import "forge-std/Script.sol";
-import "forge-std/console2.sol";
+import {Script, console2} from "forge-std/Script.sol";
 
 import {PaymentChecks} from "../src/PaymentChecks.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {MockERC20} from "../test/MockERC20.sol";
 
+/// @notice Deploy PaymentChecks + a MockERC20, then mint and redeem a check on Polygon Amoy.
 contract DeployAndSmoke is Script {
+    uint256 internal constant AMOY_CHAIN_ID = 80002;
+
     function run() external {
-        // Accepts:
-        // - "0x..." hex private key
-        // - or a raw 64-char hex string (we auto-prefix 0x)
-        string memory pkStr = vm.envString("PRIVATE_KEY");
-        uint256 deployerPrivateKey = _parsePrivateKey(pkStr);
-        address deployer = vm.addr(deployerPrivateKey);
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerKey);
 
-        vm.startBroadcast(deployerPrivateKey);
+        require(block.chainid == AMOY_CHAIN_ID, "DeployAndSmoke: wrong chain (expected Amoy)");
 
-        // 1) Deploy contracts
-        PaymentChecks checks = new PaymentChecks();
-        MockERC20 token = new MockERC20();
+        vm.startBroadcast(deployerKey);
 
-        // 2) Fund deployer with mock tokens for testing
-        uint8 dec = token.decimals();
-        uint256 unit = 10 ** uint256(dec);
+        // 1) Deploy protocol + mock token
+        PaymentChecks checks = new PaymentChecks(
+            "Payment Checks",
+            "PCHK",
+            "https://checks.example/api/token/"
+        );
 
-        // Mint 1,000 tokens to the deployer
-        token.mint(deployer, 1000 * unit);
+        MockERC20 token = new MockERC20("Mock USD", "mUSD", 6);
 
-        // 3) Approve checks contract to pull tokens
-        uint256 amount = 1 * unit; // 1 token (based on decimals)
+        // 2) Fund deployer with mock tokens and approve the checks contract
+        uint256 amount = 100e6; // 100.000000 (6 decimals)
+        token.mint(deployer, amount);
         token.approve(address(checks), amount);
 
-        // 4) Mint a PaymentCheck that is immediately claimable
-        // Using claimableAt = 0 avoids post-dated validation rules.
+        // 3) Mint a payment check
+        // IMPORTANT:
+        // - claimableAt == 0 tells PaymentChecks to set claimableAt to "now" at mint time.
+        // - This avoids InvalidClaimableAt reverts due to block timestamp drift between mined txs.
         uint64 claimableAt = 0;
 
-        // Unique referenceId per run
         bytes32 referenceId = keccak256(
-            abi.encodePacked("amoy-smoke", block.chainid, block.number, deployer, address(token), amount)
+            abi.encodePacked(
+                "amoy-smoke",
+                block.chainid,
+                deployer,
+                block.timestamp,
+                block.number
+            )
         );
 
         uint256 checkId = checks.mintPaymentCheck(
-            deployer,         // recipient/owner
+            deployer,         // recipient (also owner of the NFT)
             address(token),   // token
             amount,           // amount
-            claimableAt,      // claimableAt (0 = immediate)
-            referenceId       // unique ref
+            claimableAt,      // 0 => now
+            referenceId       // unique per run
         );
 
-        vm.stopBroadcast();
+        // 4) Redeem immediately (should succeed because claimableAt is "now")
+        checks.redeemPaymentCheck(checkId);
 
-        // Logs for your terminal
+        // Logs (helpful when running locally with -vvv)
         console2.log("Deployer:", deployer);
         console2.log("Chain ID:", block.chainid);
         console2.log("PaymentChecks:", address(checks));
         console2.log("MockERC20:", address(token));
         console2.log("checkId:", checkId);
-    }
+        console2.log("Deployer token balance:", token.balanceOf(deployer));
 
-    function _parsePrivateKey(string memory pk) internal view returns (uint256) {
-        bytes memory b = bytes(pk);
-
-        // If user pasted raw 64-hex characters, prefix it with 0x
-        if (b.length == 64) {
-            pk = string.concat("0x", pk);
-        }
-
-        // vm.parseUint supports 0x-prefixed hex and decimal strings
-        return vm.parseUint(pk);
+        vm.stopBroadcast();
     }
 }
