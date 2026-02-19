@@ -37,10 +37,15 @@ contract DeployAndSmoke is Script {
         token.approve(address(checks), amount);
 
         address recipient = deployer; // smoke to self
-        uint64 claimableAt = uint64(block.timestamp + 1);
+
+        // IMPORTANT:
+        // claimableAt = 0 means "immediately claimable" and avoids post-date minimum delay rules.
+        // If you want a post-dated check later, set something like:
+        // uint64 claimableAt = uint64(block.timestamp + 1 hours);
+        uint64 claimableAt = 0;
 
         bytes32 referenceId = keccak256(
-            abi.encodePacked("smoke", block.chainid, address(token), recipient, amount)
+            abi.encodePacked("smoke", block.chainid, address(token), recipient, amount, claimableAt)
         );
 
         uint256 checkId = checks.mintPaymentCheck(
