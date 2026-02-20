@@ -1,21 +1,20 @@
 # Checks Anchor
-
-Owner: James Odom  
-Last updated: 2026-02-12  
+Owner: James Odom
+Last updated: 2026-02-19
 Purpose: Single source of truth for scope, decisions, architecture, milestones, and workflow.
 
 ## 1) Snapshot
 - What Checks is: Programmable NFT Checks on-chain
-- Current stage: Initial testnet beta
-- Current focus: Payment Checks first
+- Current stage: Initial testnet beta build
+- Current focus: Payment Checks v1 first
 - North star: Security first, deterministic status, clean expansion later
 
 ## 2) Scope
 ### Initial testnet scope (must ship)
-- Payment Checks end to end (mint, redeem, status, history)
+- Payment Checks end to end (mint, transfer, redeem, void, status, history)
 - Explorer baseline (deterministic status, search, detail view)
-- Minimal config for supported tokens and testnet network
-- Security baseline (tests, static analysis, focused review on critical paths)
+- Minimal config for supported tokens and the testnet network
+- Security baseline (tests, focused review on critical paths)
 
 ### Deferred (later stages)
 - Vesting Checks
@@ -25,7 +24,16 @@ Purpose: Single source of truth for scope, decisions, architecture, milestones, 
 - Multi-chain expansion beyond the initial target chain(s)
 
 ## 3) Locked decisions
-See docs/decisions for the canonical decision records.
+- PaymentChecks v1 spec is locked in: docs/specs/payment-checks-v1.md
+- No expiration in v1.
+- claimableAt:
+  - claimableAt == 0 means instant and normalized to createdAt
+  - post-dated checks are claimable only after claimableAt
+- Void:
+  - issuer-only
+  - only while now < claimableAt
+  - after VOID, redeem must be impossible
+- NFT is never burned.
 
 ## 4) Canonical references
 - Whitepaper / handbook (GitBook): https://paycheck-labs.gitbook.io/checks-whitepaper
@@ -45,50 +53,48 @@ See docs/decisions for the canonical decision records.
   - apps/web
   - docs/*
 
-## 6) Payment Check lifecycle (initial testnet)
-- States (draft until we lock spec):
-  - Created
-  - Claimable (optional if separate from Created)
-  - Redeemed
-  - Cancelled (optional)
-  - Expired (optional)
-- Required events (draft until we lock spec):
-  - PaymentCheckMinted
-  - PaymentCheckRedeemed
-  - PaymentCheckCancelled (if used)
-  - PaymentCheckExpired (if used)
+## 6) Payment Check lifecycle (v1 testnet)
+- Status enum: NONE, ACTIVE, REDEEMED, VOID
+- State machine:
+  - NONE -> ACTIVE -> REDEEMED (terminal)
+  - NONE -> ACTIVE -> VOID (terminal)
 - Deterministic status rule:
-  - Explorer derives status from contract state and events, no guessing
+  - Explorer derives status from on-chain state plus events, no guessing
+
+Required events (Explorer requirements)
+- PaymentCheckMinted(checkId, issuer, initialHolder, token, amount, claimableAt, referenceId)
+- PaymentCheckRedeemed(checkId, redeemer, token, amount)
+- PaymentCheckVoided(checkId, issuer, token, amount)
+- ERC721 Transfer events for ownership history
 
 ## 7) Security rules
 - No secrets in repo
-- No mainnet value flow without audit + mainnet readiness checklist
-- Tests required for mint and redeem paths
+- No mainnet value flow without audit + readiness checklist
+- Tests required for mint, redeem, and void paths
 - Minimal privilege and safe approvals
+- Edge-case token behavior must be tested (no-return, false-return, reentrancy)
 
 ## 8) Milestones
-- M0 Foundation: repo structure, docs, tooling choice, CI baseline
-- M1 Payment Checks contracts: mint + redeem + event spec
-- M2 Explorer baseline: deterministic status, search, detail page logic
-- M3 App flow: wallet connect, mint UI, redeem UI (later)
-- M4 Testnet beta live: deployed, verified, smoke-tested, monitored
+- M0: Repo stabilized, CI green, first successful on-chain Amoy smoke run
+- M1: Repeatable smoke coverage (transfer + void + post-dated claim) and stronger test suite
+- M2: Explorer baseline (event index, deterministic status, check detail by id)
+- M3: Basic web flow (connect wallet, mint, view, redeem)
+- M4: Testnet beta release (deployed, verified, smoke-tested, monitored)
 
 ## 9) Backlog (next 10)
-1. Lock Payment Check spec: recipient model, expiration, cancellation, required events
-2. Choose contracts toolchain and initialize packages/contracts
-3. Implement mint and redeem with unit tests
-4. Define deterministic status mapping for Explorer
-5. Choose indexing approach for testnet (lightweight scan vs The Graph)
-6. Implement explorer data model + status reconstruction
-7. Implement search + check detail endpoints or modules
-8. Add deploy scripts + verification steps for testnet
-9. Add CI checks (tests, formatting)
-10. Run a focused review on mint and redeem security edge cases
+1. Expand DeployAndSmoke to cover transfer, void, and post-dated scenarios
+2. Add Foundry tests mirroring real user flows and edge cases
+3. Decide CI trigger policy (PR-only vs also push to main)
+4. Add contract verification steps for Amoy
+5. Create a deployments record for Explorer (amoy.json)
+6. Define Explorer status reconstruction rules and data model
+7. Implement minimal event scanner (block range, filters, pagination)
+8. Build check detail view logic (by checkId)
+9. Implement search primitives (by issuer, holder, token, status)
+10. Do a focused review of escrow, approvals, and reentrancy assumptions
 
 ## 10) Open questions
-- Target testnet network:
 - Supported token list for initial beta:
-- Recipient model: direct address only vs claim link:
-- Expiration and cancellation rules:
-- Indexing approach: The Graph vs lightweight event scan:
+- Explorer indexing approach: lightweight scan vs The Graph
 - Upgradeability approach for testnet:
+- Expiration design for v2 (if needed) and settlement policy:
