@@ -1,0 +1,104 @@
+# Serial and QR Strategy (Explorer and NFT Media)
+
+Status: Draft
+Scope: Explorer and NFT check media only. Not protocol-enforced in v1.
+
+## 1) Goals
+
+- Human-readable serial on the NFT check image.
+- QR code that links to the canonical Checks Explorer page for the check.
+- Serial space large enough to avoid collisions at scale.
+- Avoid ambiguous characters (I vs 1, O vs 0).
+- Keep Payment Checks v1 protocol unchanged. No expiration added.
+
+## 2) Serial format
+
+Display format:
+
+#LLL-NNNNLL-LLNN
+
+Where:
+- L = uppercase letter
+- N = digit
+- Hyphens are separators for readability
+- The leading # is display-only
+
+Example:
+#ABX-5249QY-MB63
+
+## 3) Allowed character set (ambiguity-free)
+
+We use a human-friendly alphabet similar to Base58 and Crockford-style schemes.
+
+Letters (24):
+A B C D E F G H J K L M N P Q R S T U V W X Y Z
+- Excludes I and O
+
+Digits (8):
+2 3 4 5 6 7 8 9
+- Excludes 0 and 1
+
+This eliminates the most common confusion pairs:
+- O vs 0
+- I vs 1
+- (optional) If we later allow lowercase, l vs 1 is also avoided by staying uppercase.
+
+Total combinations:
+- letters^7 * digits^6
+- 24^7 * 8^6 = 1,202,315,964,973,056
+
+## 4) Serial generation
+
+Serials are generated off-chain using a cryptographically secure RNG.
+Collision risk is already extremely low, but we still enforce uniqueness in storage:
+
+- Generate candidate serial
+- Check database uniqueness
+- If collision, regenerate
+
+Optional: profanity and brand safety filter
+- Block certain 3-letter prefixes or substrings
+
+## 5) On-chain linkage (recommended)
+
+Payment Checks v1 includes `referenceId` (bytes32). We use it to anchor the serial without revealing it on-chain.
+
+Recommended approach:
+- referenceId = keccak256(utf8(serial))
+
+Benefits:
+- Explorer can verify that a displayed serial matches the on-chain referenceId.
+- Serial remains UI-level data, not a protocol dependency.
+- No protocol changes needed.
+
+## 6) QR strategy
+
+QR is generated after mint, when chainId, contract, and checkId are known.
+
+Canonical Explorer URL format (recommended):
+https://explorer.checks.xyz/serial
+
+Considerations:
+- Include: /Network or /ChainID
+- Identify if: /check (NFT) or /cash (NFT)
+- Track by either: /serial or /contract
+
+QR payload is exactly the canonical URL above.
+
+Mint UI behavior:
+- Before mint: show placeholder QR block
+- After mint confirmation: replace placeholder with generated QR
+
+## 7) Explorer requirements
+
+Explorer must support:
+- Check detail page by (chainId, contract, checkId)
+- Resolve and display serial
+- Verify serial by hashing and comparing to on-chain referenceId (when provided)
+- Display status and lifecycle events: minted, redeemed, voided, transfers
+
+## 8) Non-goals
+
+- No protocol-level uniqueness enforcement for serials in v1
+- No expiration work in v1
+- No requirement that serial be recoverable from on-chain data
