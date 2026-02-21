@@ -92,7 +92,7 @@ contract DeployAndSmoke is Script {
         uint256 amount,
         string memory tag
     ) internal returns (uint256 checkId) {
-        token; // silence unused warning in some toolchains
+        token;
 
         (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
 
@@ -113,7 +113,7 @@ contract DeployAndSmoke is Script {
         uint256 amount,
         string memory tag
     ) internal returns (uint256 checkId) {
-        token; // silence unused warning in some toolchains
+        token;
 
         (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
         uint64 claimableAt = uint64(block.timestamp + POSTDATED_SECONDS);
