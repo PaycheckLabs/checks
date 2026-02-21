@@ -31,10 +31,12 @@ contract DeployAndSmoke is Script {
         uint256 holderKey = _readOptionalEnvUint("SECOND_PRIVATE_KEY");
         address holder = holderKey == 0 ? address(0) : vm.addr(holderKey);
 
+        // 1) Deploy protocol + mock token (issuer pays gas)
         vm.startBroadcast(issuerKey);
         PaymentChecks checks = new PaymentChecks("Payment Checks", "PCHK", "https://checks.example/api/token/");
         MockERC20 token = new MockERC20("Mock USD", "mUSD", 6);
 
+        // Fund issuer for multiple checks and approve once.
         uint256 totalNeeded = AMOUNT * 3;
         token.mint(issuer, totalNeeded);
         token.approve(address(checks), type(uint256).max);
@@ -46,11 +48,11 @@ contract DeployAndSmoke is Script {
         console2.log("PaymentChecks:", address(checks));
         console2.log("MockERC20:", address(token));
 
-        // Flow 1: instant mint + redeem by issuer
+        // Flow 1: immediate mint + redeem by issuer
         uint256 checkId1 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-issuer");
         _redeem(checks, issuerKey, checkId1, "redeem issuer");
 
-        // Flow 2: transfer-before-redeem
+        // Flow 2: transfer-before-redeem (full coverage requires SECOND_PRIVATE_KEY)
         if (holder != address(0)) {
             uint256 checkId2 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-transfer");
             _transfer(checks, issuerKey, issuer, holder, checkId2);
@@ -64,10 +66,11 @@ contract DeployAndSmoke is Script {
             console2.log("SKIP: set SECOND_PRIVATE_KEY to test transfer-before-redeem");
         }
 
-        // Flow 3: post-dated mint, redeem revert, optional transfer, redeem revert, void, redeem revert
+        // Flow 3: post-dated redeem should revert, then issuer voids, then redeem should still revert
         uint256 checkId3 = _mintPostdated(checks, token, issuerKey, issuer, AMOUNT, "postdated-void");
         _expectNotClaimableYet(checks, issuerKey, checkId3, "postdated redeem (issuer) should revert");
 
+        // Optional: issuer can still void after transfer while post-dated
         if (holder != address(0)) {
             _transfer(checks, issuerKey, issuer, holder, checkId3);
             if (holderKey != 0) {
@@ -78,6 +81,7 @@ contract DeployAndSmoke is Script {
         _void(checks, issuerKey, checkId3);
         _expectCheckNotActive(checks, issuerKey, checkId3, "redeem after void should revert");
 
+        // Post-condition: escrow should be empty after redeem + void
         require(token.balanceOf(address(checks)) == 0, "escrow should be empty after redeem/void");
 
         console2.log("Issuer token balance:", token.balanceOf(issuer));
@@ -97,6 +101,7 @@ contract DeployAndSmoke is Script {
         (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
 
         vm.startBroadcast(issuerKey);
+        // claimableAt = 0 => normalized to now in-contract
         checkId = checks.mintPaymentCheck(issuer, address(token), amount, 0, ref);
         vm.stopBroadcast();
 
@@ -150,36 +155,23 @@ contract DeployAndSmoke is Script {
     }
 
     function _expectNotClaimableYet(PaymentChecks checks, uint256 key, uint256 checkId, string memory label) internal {
-        vm.startBroadcast(key);
-        try checks.redeemPaymentCheck(checkId) {
-            vm.stopBroadcast();
-            revert("expected NotClaimableYet");
-        } catch (bytes memory reason) {
-            vm.stopBroadcast();
-            bytes4 sel = _selector(reason);
-            require(sel == IPaymentChecks.NotClaimableYet.selector, "unexpected revert selector");
-            console2.log("OK:", label);
-        }
+        // Negative-path check should not be broadcast. We only simulate the revert.
+        address caller = vm.addr(key);
+        vm.prank(caller);
+        vm.expectRevert(IPaymentChecks.NotClaimableYet.selector);
+        checks.redeemPaymentCheck(checkId);
+
+        console2.log("OK:", label);
     }
 
     function _expectCheckNotActive(PaymentChecks checks, uint256 key, uint256 checkId, string memory label) internal {
-        vm.startBroadcast(key);
-        try checks.redeemPaymentCheck(checkId) {
-            vm.stopBroadcast();
-            revert("expected CheckNotActive");
-        } catch (bytes memory reason) {
-            vm.stopBroadcast();
-            bytes4 sel = _selector(reason);
-            require(sel == IPaymentChecks.CheckNotActive.selector, "unexpected revert selector");
-            console2.log("OK:", label);
-        }
-    }
+        // Negative-path check should not be broadcast. We only simulate the revert.
+        address caller = vm.addr(key);
+        vm.prank(caller);
+        vm.expectRevert(IPaymentChecks.CheckNotActive.selector);
+        checks.redeemPaymentCheck(checkId);
 
-    function _selector(bytes memory revertData) internal pure returns (bytes4 sel) {
-        if (revertData.length < 4) return bytes4(0);
-        assembly {
-            sel := mload(add(revertData, 0x20))
-        }
+        console2.log("OK:", label);
     }
 
     function _readOptionalEnvUint(string memory key) internal returns (uint256 v) {
