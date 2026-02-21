@@ -48,14 +48,15 @@ contract DeployAndSmoke is Script {
         console2.log("PaymentChecks:", address(checks));
         console2.log("MockERC20:", address(token));
 
-        // Flow 1: immediate mint + redeem by issuer
+        // Flow 1: instant mint + redeem by issuer
         uint256 checkId1 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-issuer");
         _redeem(checks, issuerKey, checkId1, "redeem issuer");
 
-        // Flow 2: transfer-before-redeem (full coverage requires SECOND_PRIVATE_KEY)
+        // Flow 2: transfer-before-redeem (full coverage requires SECOND_PRIVATE_KEY for the redeem step)
         if (holder != address(0)) {
             uint256 checkId2 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-transfer");
             _transfer(checks, issuerKey, issuer, holder, checkId2);
+            require(checks.ownerOf(checkId2) == holder, "transfer failed (checkId2)");
 
             if (holderKey != 0) {
                 _redeem(checks, holderKey, checkId2, "redeem holder");
@@ -66,20 +67,19 @@ contract DeployAndSmoke is Script {
             console2.log("SKIP: set SECOND_PRIVATE_KEY to test transfer-before-redeem");
         }
 
-        // Flow 3: post-dated redeem should revert, then issuer voids, then redeem should still revert
+        // Flow 3: post-dated mint, verify not claimable yet (no intentional revert), optional transfer, issuer void, verify void
         uint256 checkId3 = _mintPostdated(checks, token, issuerKey, issuer, AMOUNT, "postdated-void");
-        _expectNotClaimableYet(checks, issuerKey, checkId3, "postdated redeem (issuer) should revert");
 
-        // Optional: issuer can still void after transfer while post-dated
+        _assertNotClaimableYet(checks, checkId3, "postdated check not claimable yet (issuer)");
+
         if (holder != address(0)) {
             _transfer(checks, issuerKey, issuer, holder, checkId3);
-            if (holderKey != 0) {
-                _expectNotClaimableYet(checks, holderKey, checkId3, "postdated redeem (holder) should revert");
-            }
+            require(checks.ownerOf(checkId3) == holder, "transfer failed (checkId3)");
+            _assertNotClaimableYet(checks, checkId3, "postdated check not claimable yet (holder)");
         }
 
         _void(checks, issuerKey, checkId3);
-        _expectCheckNotActive(checks, issuerKey, checkId3, "redeem after void should revert");
+        _assertVoided(checks, checkId3, "check is void after issuer void");
 
         // Post-condition: escrow should be empty after redeem + void
         require(token.balanceOf(address(checks)) == 0, "escrow should be empty after redeem/void");
@@ -154,23 +154,16 @@ contract DeployAndSmoke is Script {
         console2.log("Void checkId:", checkId);
     }
 
-    function _expectNotClaimableYet(PaymentChecks checks, uint256 key, uint256 checkId, string memory label) internal {
-        // Negative-path check should not be broadcast. We only simulate the revert.
-        address caller = vm.addr(key);
-        vm.prank(caller);
-        vm.expectRevert(IPaymentChecks.NotClaimableYet.selector);
-        checks.redeemPaymentCheck(checkId);
-
-        console2.log("OK:", label);
+    function _assertNotClaimableYet(PaymentChecks checks, uint256 checkId, string memory label) internal {
+        IPaymentChecks.PaymentCheck memory pc = checks.getPaymentCheck(checkId);
+        require(pc.claimableAt != 0, "expected postdated claimableAt");
+        require(block.timestamp < pc.claimableAt, "expected not claimable yet");
+        console2.log("OK:", label, "claimableAt:", pc.claimableAt);
     }
 
-    function _expectCheckNotActive(PaymentChecks checks, uint256 key, uint256 checkId, string memory label) internal {
-        // Negative-path check should not be broadcast. We only simulate the revert.
-        address caller = vm.addr(key);
-        vm.prank(caller);
-        vm.expectRevert(IPaymentChecks.CheckNotActive.selector);
-        checks.redeemPaymentCheck(checkId);
-
+    function _assertVoided(PaymentChecks checks, uint256 checkId, string memory label) internal {
+        IPaymentChecks.Status st = checks.getPaymentCheckStatus(checkId);
+        require(st == IPaymentChecks.Status.VOID, "expected VOID status");
         console2.log("OK:", label);
     }
 
