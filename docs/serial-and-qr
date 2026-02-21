@@ -1,33 +1,33 @@
 # Serial and QR Strategy (Explorer and NFT Media)
 
-Status: Draft
+Status: Draft  
 Scope: Explorer and NFT check media only. Not protocol-enforced in v1.
 
 ## 1) Goals
-
 - Human-readable serial on the NFT check image.
-- QR code that links to the canonical Checks Explorer page for the check.
+- QR code that links to the canonical Checks Explorer page for the serial.
 - Serial space large enough to avoid collisions at scale.
 - Avoid ambiguous characters (I vs 1, O vs 0).
 - Keep Payment Checks v1 protocol unchanged. No expiration added.
 
 ## 2) Serial format
-
 Display format:
 
-#LLL-NNNNLL-LLNN
+LLL-NNNNLL-LLNN
 
 Where:
 - L = uppercase letter
 - N = digit
 - Hyphens are separators for readability
-- The leading # is display-only
 
 Example:
-#ABX-5249QY-MB63
+ABX-5249QY-MB63
+
+Notes:
+- We do not use a leading # anywhere.
+- Serials are always generated in uppercase.
 
 ## 3) Allowed character set (ambiguity-free)
-
 We use a human-friendly alphabet similar to Base58 and Crockford-style schemes.
 
 Letters (24):
@@ -41,64 +41,80 @@ Digits (8):
 This eliminates the most common confusion pairs:
 - O vs 0
 - I vs 1
-- (optional) If we later allow lowercase, l vs 1 is also avoided by staying uppercase.
 
 Total combinations:
 - letters^7 * digits^6
 - 24^7 * 8^6 = 1,202,315,964,973,056
 
 ## 4) Serial generation
-
 Serials are generated off-chain using a cryptographically secure RNG.
-Collision risk is already extremely low, but we still enforce uniqueness in storage:
 
+Collision risk is extremely low, but we still enforce uniqueness:
 - Generate candidate serial
 - Check database uniqueness
 - If collision, regenerate
 
-Optional: profanity and brand safety filter
-- Block certain 3-letter prefixes or substrings
+Filtering rules:
+- Reserved routes: prevent serials that could conflict with future Explorer site paths.
+- Profanity and harmful substring filtering: reject serials containing blocked terms.
+- Optional readability rules: avoid excessive repeats if needed.
 
 ## 5) On-chain linkage (recommended)
-
 Payment Checks v1 includes `referenceId` (bytes32). We use it to anchor the serial without revealing it on-chain.
 
-Recommended approach:
-- referenceId = keccak256(utf8(serial))
+Normalization
+- serialNormalized is the serial in uppercase with hyphens preserved.
+- No leading # is ever used.
+- Example:
+  - serial: ABX-5249QY-MB63
+  - serialNormalized: ABX-5249QY-MB63
 
-Benefits:
+Recommended approach
+- referenceId = keccak256(utf8(serialNormalized))
+
+Benefits
 - Explorer can verify that a displayed serial matches the on-chain referenceId.
 - Serial remains UI-level data, not a protocol dependency.
 - No protocol changes needed.
 
-## 6) QR strategy
+## 6) URL and QR strategy
+QR is generated after mint, when chainId, contract, and tokenId (checkId) are known.
 
-QR is generated after mint, when chainId, contract, and checkId are known.
+Canonical serial landing route:
+https://explorer.checks.xyz/<serial>
 
-Canonical Explorer URL format (recommended):
-https://explorer.checks.xyz/serial
+Example:
+https://explorer.checks.xyz/ABX-5249QY-MB63
 
-Considerations:
-- Include: /Network or /ChainID
-- Identify if: /check (NFT) or /cash (NFT)
-- Track by either: /serial or /contract
+Explorer routing rules
+- Treat a path as a serial only if it matches the serial format.
+- Serial lookup is case-insensitive. User input is normalized to uppercase.
+- If a user visits a lowercase serial URL, redirect to the canonical uppercase URL.
 
-QR payload is exactly the canonical URL above.
+Optional search page
+- https://explorer.checks.xyz/serial may exist as a search page.
+- QR payload should be the serial landing route above, not the search page.
 
-Mint UI behavior:
-- Before mint: show placeholder QR block
-- After mint confirmation: replace placeholder with generated QR
+## 7) Reserved routes and filters
+Reserved site routes
+- Certain paths are reserved for site pages and must never be treated as a serial.
+- Examples: api, docs, doc, about, admin, app, static, assets, favicon.ico, robots.txt, sitemap.xml, serial
+- Explorer should check this list before attempting serial lookup.
+- Serial generation should also avoid producing values that conflict with reserved routes.
 
-## 7) Explorer requirements
+Profanity and harmful substring filtering
+- Normalize by uppercasing and removing hyphens before checking.
+- Maintain the blocked list off-chain so it can be updated without protocol changes.
 
+## 8) Explorer requirements
 Explorer must support:
-- Check detail page by (chainId, contract, checkId)
+- Serial landing page that maps serial to the underlying asset
 - Resolve and display serial
-- Verify serial by hashing and comparing to on-chain referenceId (when provided)
+- Verify serial by hashing and comparing to on-chain referenceId
 - Display status and lifecycle events: minted, redeemed, voided, transfers
+- Show chain, contract, and tokenId (checkId) clearly
 
-## 8) Non-goals
-
+## 9) Non-goals
 - No protocol-level uniqueness enforcement for serials in v1
 - No expiration work in v1
 - No requirement that serial be recoverable from on-chain data
