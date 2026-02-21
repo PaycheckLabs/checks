@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
+
 import {PaymentChecks} from "../src/PaymentChecks.sol";
 import {IPaymentChecks} from "../src/IPaymentChecks.sol";
 import {MockERC20} from "../test/MockERC20.sol";
@@ -16,22 +17,24 @@ contract DeployAndSmoke is Script {
     uint256 internal constant AMOUNT = 100e6; // 100.000000 (6 decimals)
     uint64 internal constant POSTDATED_SECONDS = 3600; // 1 hour
 
+    bytes internal constant LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // 24, excludes I and O
+    bytes internal constant DIGITS = "23456789"; // 8, excludes 0 and 1
+
+    uint256 internal serialNonce;
+
     function run() external {
         require(block.chainid == AMOY_CHAIN_ID, "DeployAndSmoke: wrong chain (expected Amoy)");
 
         uint256 issuerKey = vm.envUint("PRIVATE_KEY");
         address issuer = vm.addr(issuerKey);
 
-        // Optional second actor for transfer-before-redeem.
         uint256 holderKey = _readOptionalEnvUint("SECOND_PRIVATE_KEY");
         address holder = holderKey == 0 ? address(0) : vm.addr(holderKey);
 
-        // 1) Deploy protocol + mock token (issuer pays gas)
         vm.startBroadcast(issuerKey);
         PaymentChecks checks = new PaymentChecks("Payment Checks", "PCHK", "https://checks.example/api/token/");
         MockERC20 token = new MockERC20("Mock USD", "mUSD", 6);
 
-        // Fund issuer for multiple checks and approve once.
         uint256 totalNeeded = AMOUNT * 3;
         token.mint(issuer, totalNeeded);
         token.approve(address(checks), type(uint256).max);
@@ -43,13 +46,13 @@ contract DeployAndSmoke is Script {
         console2.log("PaymentChecks:", address(checks));
         console2.log("MockERC20:", address(token));
 
-        // Flow 1: immediate mint + redeem by issuer
-        uint256 checkId1 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, _ref("instant-issuer", issuer));
+        // Flow 1: instant mint + redeem by issuer
+        uint256 checkId1 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-issuer");
         _redeem(checks, issuerKey, checkId1, "redeem issuer");
 
-        // Flow 2: transfer-before-redeem (full coverage requires SECOND_PRIVATE_KEY for the redeem step)
+        // Flow 2: transfer-before-redeem
         if (holder != address(0)) {
-            uint256 checkId2 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, _ref("instant-transfer", issuer));
+            uint256 checkId2 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-transfer");
             _transfer(checks, issuerKey, issuer, holder, checkId2);
 
             if (holderKey != 0) {
@@ -61,11 +64,10 @@ contract DeployAndSmoke is Script {
             console2.log("SKIP: set SECOND_PRIVATE_KEY to test transfer-before-redeem");
         }
 
-        // Flow 3: post-dated redeem should revert, then issuer voids, then redeem should still revert
-        uint256 checkId3 = _mintPostdated(checks, token, issuerKey, issuer, AMOUNT, _ref("postdated-void", issuer));
+        // Flow 3: post-dated mint, redeem revert, optional transfer, redeem revert, void, redeem revert
+        uint256 checkId3 = _mintPostdated(checks, token, issuerKey, issuer, AMOUNT, "postdated-void");
         _expectNotClaimableYet(checks, issuerKey, checkId3, "postdated redeem (issuer) should revert");
 
-        // Optional: show issuer can still void after transfer while post-dated
         if (holder != address(0)) {
             _transfer(checks, issuerKey, issuer, holder, checkId3);
             if (holderKey != 0) {
@@ -76,7 +78,6 @@ contract DeployAndSmoke is Script {
         _void(checks, issuerKey, checkId3);
         _expectCheckNotActive(checks, issuerKey, checkId3, "redeem after void should revert");
 
-        // Post-condition: escrow should be empty after redeem + void
         require(token.balanceOf(address(checks)) == 0, "escrow should be empty after redeem/void");
 
         console2.log("Issuer token balance:", token.balanceOf(issuer));
@@ -89,14 +90,19 @@ contract DeployAndSmoke is Script {
         uint256 issuerKey,
         address issuer,
         uint256 amount,
-        bytes32 ref
+        string memory tag
     ) internal returns (uint256 checkId) {
         token; // silence unused warning in some toolchains
+
+        (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
+
         vm.startBroadcast(issuerKey);
-        // claimableAt = 0 => normalized to now in-contract
         checkId = checks.mintPaymentCheck(issuer, address(token), amount, 0, ref);
         vm.stopBroadcast();
+
         console2.log("Mint instant checkId:", checkId);
+        console2.log(string(abi.encodePacked("Serial: ", serial)));
+        console2.log(string(abi.encodePacked("Serial URL: https://explorer.checks.xyz/", serial)));
     }
 
     function _mintPostdated(
@@ -105,14 +111,20 @@ contract DeployAndSmoke is Script {
         uint256 issuerKey,
         address issuer,
         uint256 amount,
-        bytes32 ref
+        string memory tag
     ) internal returns (uint256 checkId) {
         token; // silence unused warning in some toolchains
+
+        (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
         uint64 claimableAt = uint64(block.timestamp + POSTDATED_SECONDS);
+
         vm.startBroadcast(issuerKey);
         checkId = checks.mintPaymentCheck(issuer, address(token), amount, claimableAt, ref);
         vm.stopBroadcast();
+
         console2.log("Mint postdated checkId:", checkId, "claimableAt:", claimableAt);
+        console2.log(string(abi.encodePacked("Serial: ", serial)));
+        console2.log(string(abi.encodePacked("Serial URL: https://explorer.checks.xyz/", serial)));
     }
 
     function _redeem(PaymentChecks checks, uint256 key, uint256 checkId, string memory label) internal {
@@ -178,7 +190,42 @@ contract DeployAndSmoke is Script {
         }
     }
 
-    function _ref(string memory tag, address issuer) internal view returns (bytes32) {
-        return keccak256(abi.encodePacked(tag, block.chainid, issuer, block.timestamp, block.number));
+    function _serialAndRef(string memory tag, address issuer) internal returns (string memory serial, bytes32 ref) {
+        bytes32 seed = keccak256(
+            abi.encodePacked(tag, block.chainid, issuer, block.timestamp, block.number, serialNonce++)
+        );
+        serial = _genSerial(seed);
+        ref = keccak256(bytes(serial));
+    }
+
+    function _genSerial(bytes32 seed) internal pure returns (string memory serial) {
+        bytes memory out = new bytes(15);
+        uint256 x = uint256(seed);
+        uint256 i = 0;
+
+        // LLL-
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = 0x2d;
+
+        // NNNN
+        out[i++] = DIGITS[x % 8]; x /= 8;
+        out[i++] = DIGITS[x % 8]; x /= 8;
+        out[i++] = DIGITS[x % 8]; x /= 8;
+        out[i++] = DIGITS[x % 8]; x /= 8;
+
+        // LL-
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = 0x2d;
+
+        // LLNN
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = DIGITS[x % 8]; x /= 8;
+        out[i++] = DIGITS[x % 8];
+
+        serial = string(out);
     }
 }
