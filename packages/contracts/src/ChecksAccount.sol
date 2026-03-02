@@ -50,7 +50,7 @@ contract ChecksAccount is ERC165, IERC6551Account {
         assembly {
             _salt := mload(add(data, 32))            // salt (unused here)
             chainId := mload(add(data, 64))          // chainId
-            tokenContract := shr(96, mload(add(data, 96))) // tokenContract (right-most 20 bytes)
+            tokenContract := and(mload(add(data, 96)), 0xffffffffffffffffffffffffffffffffffffffff)
             tokenId := mload(add(data, 128))         // tokenId
         }
     }
