@@ -1,9 +1,9 @@
 # Amoy Deployment — Payment Checks (ERC-6551)
 
-This file was renamed for clarity.
+This file was renamed for clarity and canonical naming.
 
-Canonical:
+Canonical deployment:
 - `docs/deployments/amoy-payment-checks.md`
 
-Legacy:
+Legacy archive:
 - `docs/deployments/amoy-payment-checks-legacy.md`
