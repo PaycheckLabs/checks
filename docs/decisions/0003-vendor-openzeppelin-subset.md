@@ -1,4 +1,4 @@
-# 0002: Vendor OpenZeppelin subset in contracts package
+# 0003: Vendor OpenZeppelin subset in contracts package
 
 Date: 2026-02-14
 Status: Accepted
