@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 
-import {PaymentChecks} from "../src/PaymentChecks.sol";
+import {PaymentChecksLegacy} from "../src/PaymentChecksLegacy.sol";
 import {IPaymentChecks} from "../src/IPaymentChecks.sol";
 
 import {MockERC20} from "./MockERC20.sol";
@@ -11,7 +11,7 @@ import {SafeERC20} from "../src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.
 import {NoReturnERC20, FalseReturnERC20, ReentrantERC20} from "./helpers/EdgeCaseERC20s.sol";
 
 contract PaymentChecksAdditionalTest is Test {
-    PaymentChecks internal checks;
+    PaymentChecksLegacy internal checks;
     MockERC20 internal token;
 
     address internal issuer = address(0xA11CE);
@@ -25,10 +25,9 @@ contract PaymentChecksAdditionalTest is Test {
         vm.warp(START_TS);
 
         token = new MockERC20("Mock USDT", "mUSDT", 6);
-        checks = new PaymentChecks("Checks Payment", "CHK-PAY", "ipfs://checks/");
+        checks = new PaymentChecksLegacy("Checks Payment (Legacy)", "CHK-PAY", "ipfs://checks/");
 
         token.mint(issuer, AMOUNT * 10);
-
         vm.prank(issuer);
         token.approve(address(checks), type(uint256).max);
     }
@@ -64,7 +63,7 @@ contract PaymentChecksAdditionalTest is Test {
         assertTrue(_startsWith(uri, "ipfs://checks/"));
     }
 
-    // ---- M1 flow coverage (matches DeployAndSmoke expectations) ----
+    // ---- M1 flow coverage (matches legacy smoke expectations) ----
 
     function testTransferThenRedeemByNewOwnerWorks() public {
         vm.prank(issuer);
@@ -108,7 +107,6 @@ contract PaymentChecksAdditionalTest is Test {
 
     function testVoidReturnsFundsAndLocksRedeemForever() public {
         uint64 claimableAt = uint64(START_TS + 500);
-
         uint256 issuerBalBeforeMint = token.balanceOf(issuer);
 
         vm.prank(issuer);
@@ -121,7 +119,7 @@ contract PaymentChecksAdditionalTest is Test {
         vm.prank(issuer);
         checks.voidPaymentCheck(checkId);
 
-        // After void, escrow is cleared and issuer is fully refunded to the pre-mint balance
+        // After void, escrow is cleared and issuer is fully refunded
         assertEq(uint256(checks.getPaymentCheckStatus(checkId)), uint256(IPaymentChecks.Status.VOID));
         assertEq(token.balanceOf(address(checks)), 0);
         assertEq(token.balanceOf(issuer), issuerBalBeforeMint);
@@ -144,7 +142,6 @@ contract PaymentChecksAdditionalTest is Test {
         // transfer NFT to someone else
         vm.prank(recipient);
         checks.transferFrom(recipient, otherHolder, checkId);
-
         assertEq(checks.ownerOf(checkId), otherHolder);
 
         // issuer can still void while post-dated
@@ -207,11 +204,13 @@ contract PaymentChecksAdditionalTest is Test {
     function _startsWith(string memory s, string memory prefix) internal pure returns (bool) {
         bytes memory a = bytes(s);
         bytes memory b = bytes(prefix);
+
         if (b.length > a.length) return false;
 
         for (uint256 i = 0; i < b.length; i++) {
             if (a[i] != b[i]) return false;
         }
+
         return true;
     }
 }

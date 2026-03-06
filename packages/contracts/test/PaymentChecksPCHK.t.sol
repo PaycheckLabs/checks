@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {PaymentChecksPCHK} from "../src/PaymentChecksPCHK.sol";
+import {PaymentChecks} from "../src/PaymentChecks.sol";
 import {ChecksAccount} from "../src/ChecksAccount.sol";
 import {MockUSD} from "../src/MockUSD.sol";
 import {IERC6551Account} from "../src/vendor/erc6551/IERC6551Account.sol";
@@ -30,7 +31,6 @@ contract PaymentChecksPCHKTest {
 
     uint256 internal constant AMOUNT = 1_500e6;
     uint64 internal constant START_TS = 1_800_000_000;
-
     bytes32 internal constant SALT = bytes32(uint256(0));
 
     function setUp() public {
@@ -56,10 +56,17 @@ contract PaymentChecksPCHKTest {
     }
 
     // --- helpers ---
-    function assertEq(uint256 a, uint256 b, string memory msg_) internal pure { require(a == b, msg_); }
-    function assertEq(address a, address b, string memory msg_) internal pure { require(a == b, msg_); }
-    function assertEq(bytes32 a, bytes32 b, string memory msg_) internal pure { require(a == b, msg_); }
-    function assertTrue(bool v, string memory msg_) internal pure { require(v, msg_); }
+    function assertEq(uint256 a, uint256 b, string memory msg_) internal pure {
+        require(a == b, msg_);
+    }
+
+    function assertEq(address a, address b, string memory msg_) internal pure {
+        require(a == b, msg_);
+    }
+
+    function assertTrue(bool v, string memory msg_) internal pure {
+        require(v, msg_);
+    }
 
     function _approveFromIssuer(uint256 amount) internal {
         vm.startPrank(issuer);
@@ -67,8 +74,12 @@ contract PaymentChecksPCHKTest {
         vm.stopPrank();
     }
 
-    function _mintTo(address initialHolder, uint64 claimableAt, bytes32 serial) internal returns (uint256 checkId, address account) {
+    function _mintTo(address initialHolder, uint64 claimableAt, bytes32 serial)
+        internal
+        returns (uint256 checkId, address account)
+    {
         _approveFromIssuer(AMOUNT);
+
         vm.startPrank(issuer);
         (checkId, account) = pchk.mintPaymentCheck(
             initialHolder,
@@ -84,7 +95,6 @@ contract PaymentChecksPCHKTest {
     // --- tests ---
     function testMintFundsTBAAndRedeem() public {
         bytes32 serial = bytes32("SERIAL-0001");
-
         (uint256 checkId, address account) = _mintTo(recipient, 0, serial);
 
         // TBA address is deterministic + deployed
@@ -116,7 +126,7 @@ contract PaymentChecksPCHKTest {
         (uint256 checkId, ) = _mintTo(recipient, claimableAt, serial);
 
         vm.prank(recipient);
-        vm.expectRevert(abi.encodeWithSelector(PaymentChecksPCHK.NotClaimableYet.selector, claimableAt, START_TS));
+        vm.expectRevert(abi.encodeWithSelector(PaymentChecks.NotClaimableYet.selector, claimableAt, START_TS));
         pchk.redeemPaymentCheck(checkId);
 
         vm.warp(claimableAt + 1);
@@ -143,7 +153,6 @@ contract PaymentChecksPCHKTest {
     function testVoidBeforeClaimableReturnsToIssuerAndLocksRedeem() public {
         bytes32 serial = bytes32("SERIAL-0004");
         uint64 claimableAt = uint64(START_TS + 500);
-
         uint256 issuerBalBefore = musd.balanceOf(issuer);
 
         (uint256 checkId, address account) = _mintTo(recipient, claimableAt, serial);
@@ -155,8 +164,9 @@ contract PaymentChecksPCHKTest {
         assertEq(musd.balanceOf(issuer), issuerBalBefore, "issuer not refunded");
 
         vm.warp(claimableAt + 1);
+
         vm.prank(recipient);
-        vm.expectRevert(abi.encodeWithSelector(PaymentChecksPCHK.CheckNotActive.selector, checkId, PaymentChecksPCHK.Status.VOID));
+        vm.expectRevert(abi.encodeWithSelector(PaymentChecks.CheckNotActive.selector, checkId, PaymentChecks.Status.VOID));
         pchk.redeemPaymentCheck(checkId);
     }
 
@@ -167,17 +177,21 @@ contract PaymentChecksPCHKTest {
         // direct executeCall from recipient must revert because msg.sender != tokenContract (PCHK)
         vm.prank(recipient);
         vm.expectRevert(abi.encodeWithSelector(ChecksAccount.NotTokenContract.selector, recipient));
-        IERC6551Account(payable(account)).executeCall(address(musd), 0, abi.encodeWithSignature("transfer(address,uint256)", recipient, 1));
+        IERC6551Account(payable(account)).executeCall(
+            address(musd),
+            0,
+            abi.encodeWithSignature("transfer(address,uint256)", recipient, 1)
+        );
     }
 
     function testSerialUniqueness() public {
         bytes32 serial = bytes32("SERIAL-DUPE");
-
         _mintTo(recipient, 0, serial);
 
         _approveFromIssuer(AMOUNT);
+
         vm.startPrank(issuer);
-        vm.expectRevert(abi.encodeWithSelector(PaymentChecksPCHK.SerialAlreadyUsed.selector, serial));
+        vm.expectRevert(abi.encodeWithSelector(PaymentChecks.SerialAlreadyUsed.selector, serial));
         pchk.mintPaymentCheck(recipient, AMOUNT, 0, serial, bytes32("Title"), "memo");
         vm.stopPrank();
     }
