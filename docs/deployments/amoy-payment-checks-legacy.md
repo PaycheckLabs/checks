@@ -1,5 +1,6 @@
-# Amoy Deployment — Payment Checks (ERC-6551)
+# Amoy Deployment — Payment Checks (PCHK) (LEGACY)
 
+Status: Deprecated deployment retained for historical reference.  
 Network: Polygon Amoy  
 Chain ID: 80002
 
@@ -8,7 +9,7 @@ Chain ID: 80002
 ERC-6551 Registry (canonical):
 0x000000006551c19487814612e58FE06813775758
 
-## Deployed contracts
+## Deployed contracts (legacy)
 
 ChecksAccount (ERC-6551 account implementation):
 0xdB461838ef569A25c5493A1A38930FB091ec0Cfa
@@ -16,7 +17,7 @@ ChecksAccount (ERC-6551 account implementation):
 MockUSD (mUSD, 6 decimals faucet token):
 0xa01C7368672b61AdE32FAEf6aeD5aeC1845dedb5
 
-PaymentChecksPCHK (PCHK):
+Payment Checks (PCHK) address:
 0x4dC6db5f06DAF4716b749EAb8d8efa27BcEE1218
 
 ## Smoke check (mint + redeem)
@@ -45,7 +46,7 @@ ChecksAccount deploy:
 MockUSD deploy:
 0x56705a0a6d44fcbe4fd7a9a57d530229b3e897464969bf202fc64399a698e5bb
 
-PCHK deploy:
+Payment Checks deploy:
 0xf4a988cc10b9899d322803924182f72227c75b4793c0f7ce0c248eda9edba0a4
 
 Mint:
