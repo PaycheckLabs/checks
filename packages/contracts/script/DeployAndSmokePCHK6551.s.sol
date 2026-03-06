@@ -32,7 +32,7 @@ contract DeployAndSmokePCHK6551 is Script {
         ChecksAccount accountImpl = new ChecksAccount();
         MockUSD musd = new MockUSD();
 
-        // 2) Deploy PaymentChecks bound to ERC-6551 Registry
+        // 2) Deploy PaymentChecks bound to ERC-6551 Registry (CANONICAL)
         PaymentChecks checks = new PaymentChecks(
             "Payment Checks (PCHK)",
             "PCHK",
