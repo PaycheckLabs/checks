@@ -2,12 +2,11 @@
 pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
-
-import {PaymentChecks} from "../src/PaymentChecks.sol";
+import {PaymentChecksLegacy} from "../src/PaymentChecksLegacy.sol";
 import {IPaymentChecks} from "../src/IPaymentChecks.sol";
 import {MockERC20} from "../test/MockERC20.sol";
 
-/// @notice Deploy PaymentChecks + a MockERC20, then run a small smoke suite on Polygon Amoy.
+/// @notice Deploy PaymentChecksLegacy + a MockERC20, then run a small smoke suite on Polygon Amoy.
 /// @dev Env:
 /// - PRIVATE_KEY: required (issuer/deployer)
 /// - SECOND_PRIVATE_KEY: optional but recommended (to redeem as a different holder)
@@ -17,8 +16,8 @@ contract DeployAndSmoke is Script {
     uint256 internal constant AMOUNT = 100e6; // 100.000000 (6 decimals)
     uint64 internal constant POSTDATED_SECONDS = 3600; // 1 hour
 
-    bytes internal constant LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // 24, excludes I and O
-    bytes internal constant DIGITS = "23456789"; // 8, excludes 0 and 1
+    bytes internal constant LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // excludes I and O
+    bytes internal constant DIGITS = "23456789"; // excludes 0 and 1
 
     uint256 internal serialNonce;
 
@@ -33,26 +32,33 @@ contract DeployAndSmoke is Script {
 
         // 1) Deploy protocol + mock token (issuer pays gas)
         vm.startBroadcast(issuerKey);
-        PaymentChecks checks = new PaymentChecks("Payment Checks", "PCHK", "https://checks.example/api/token/");
+
+        PaymentChecksLegacy checks = new PaymentChecksLegacy(
+            "Payment Checks (Legacy)",
+            "PCHK",
+            "https://checks.example/api/token/"
+        );
+
         MockERC20 token = new MockERC20("Mock USD", "mUSD", 6);
 
-        // Fund issuer for multiple checks and approve once.
+        // Fund issuer for multiple checks and approve once
         uint256 totalNeeded = AMOUNT * 3;
         token.mint(issuer, totalNeeded);
         token.approve(address(checks), type(uint256).max);
+
         vm.stopBroadcast();
 
         console2.log("Issuer:", issuer);
         console2.log("Holder (optional):", holder);
         console2.log("Chain ID:", block.chainid);
-        console2.log("PaymentChecks:", address(checks));
+        console2.log("PaymentChecksLegacy:", address(checks));
         console2.log("MockERC20:", address(token));
 
         // Flow 1: instant mint + redeem by issuer
         uint256 checkId1 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-issuer");
         _redeem(checks, issuerKey, checkId1, "redeem issuer");
 
-        // Flow 2: transfer-before-redeem (full coverage requires SECOND_PRIVATE_KEY for the redeem step)
+        // Flow 2: transfer-before-redeem (requires SECOND_PRIVATE_KEY for the redeem step)
         if (holder != address(0)) {
             uint256 checkId2 = _mintInstant(checks, token, issuerKey, issuer, AMOUNT, "instant-transfer");
             _transfer(checks, issuerKey, issuer, holder, checkId2);
@@ -67,9 +73,8 @@ contract DeployAndSmoke is Script {
             console2.log("SKIP: set SECOND_PRIVATE_KEY to test transfer-before-redeem");
         }
 
-        // Flow 3: post-dated mint, verify not claimable yet (no intentional revert), optional transfer, issuer void, verify void
+        // Flow 3: post-dated mint, verify not claimable yet, optional transfer, issuer void, verify void
         uint256 checkId3 = _mintPostdated(checks, token, issuerKey, issuer, AMOUNT, "postdated-void");
-
         _assertNotClaimableYet(checks, checkId3, "postdated check not claimable yet (issuer)");
 
         if (holder != address(0)) {
@@ -89,7 +94,7 @@ contract DeployAndSmoke is Script {
     }
 
     function _mintInstant(
-        PaymentChecks checks,
+        PaymentChecksLegacy checks,
         MockERC20 token,
         uint256 issuerKey,
         address issuer,
@@ -97,7 +102,6 @@ contract DeployAndSmoke is Script {
         string memory tag
     ) internal returns (uint256 checkId) {
         token;
-
         (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
 
         vm.startBroadcast(issuerKey);
@@ -107,11 +111,11 @@ contract DeployAndSmoke is Script {
 
         console2.log("Mint instant checkId:", checkId);
         console2.log(string(abi.encodePacked("Serial: ", serial)));
-        console2.log(string(abi.encodePacked("Serial URL: https://explorer.checks.xyz/", serial)));
+        console2.log(string(abi.encodePacked("Serial URL: https://explorer.checks.xyz/testnet/", serial)));
     }
 
     function _mintPostdated(
-        PaymentChecks checks,
+        PaymentChecksLegacy checks,
         MockERC20 token,
         uint256 issuerKey,
         address issuer,
@@ -119,8 +123,8 @@ contract DeployAndSmoke is Script {
         string memory tag
     ) internal returns (uint256 checkId) {
         token;
-
         (string memory serial, bytes32 ref) = _serialAndRef(tag, issuer);
+
         uint64 claimableAt = uint64(block.timestamp + POSTDATED_SECONDS);
 
         vm.startBroadcast(issuerKey);
@@ -129,17 +133,17 @@ contract DeployAndSmoke is Script {
 
         console2.log("Mint postdated checkId:", checkId, "claimableAt:", claimableAt);
         console2.log(string(abi.encodePacked("Serial: ", serial)));
-        console2.log(string(abi.encodePacked("Serial URL: https://explorer.checks.xyz/", serial)));
+        console2.log(string(abi.encodePacked("Serial URL: https://explorer.checks.xyz/testnet/", serial)));
     }
 
-    function _redeem(PaymentChecks checks, uint256 key, uint256 checkId, string memory label) internal {
+    function _redeem(PaymentChecksLegacy checks, uint256 key, uint256 checkId, string memory label) internal {
         vm.startBroadcast(key);
         checks.redeemPaymentCheck(checkId);
         vm.stopBroadcast();
         console2.log("OK:", label, "checkId:", checkId);
     }
 
-    function _transfer(PaymentChecks checks, uint256 key, address from, address to, uint256 checkId) internal {
+    function _transfer(PaymentChecksLegacy checks, uint256 key, address from, address to, uint256 checkId) internal {
         require(to != address(0), "transfer target is zero");
         vm.startBroadcast(key);
         checks.transferFrom(from, to, checkId);
@@ -147,21 +151,21 @@ contract DeployAndSmoke is Script {
         console2.log("Transfer checkId:", checkId, "to:", to);
     }
 
-    function _void(PaymentChecks checks, uint256 issuerKey, uint256 checkId) internal {
+    function _void(PaymentChecksLegacy checks, uint256 issuerKey, uint256 checkId) internal {
         vm.startBroadcast(issuerKey);
         checks.voidPaymentCheck(checkId);
         vm.stopBroadcast();
         console2.log("Void checkId:", checkId);
     }
 
-    function _assertNotClaimableYet(PaymentChecks checks, uint256 checkId, string memory label) internal {
+    function _assertNotClaimableYet(PaymentChecksLegacy checks, uint256 checkId, string memory label) internal {
         IPaymentChecks.PaymentCheck memory pc = checks.getPaymentCheck(checkId);
         require(pc.claimableAt != 0, "expected postdated claimableAt");
         require(block.timestamp < pc.claimableAt, "expected not claimable yet");
         console2.log("OK:", label, "claimableAt:", pc.claimableAt);
     }
 
-    function _assertVoided(PaymentChecks checks, uint256 checkId, string memory label) internal {
+    function _assertVoided(PaymentChecksLegacy checks, uint256 checkId, string memory label) internal {
         IPaymentChecks.Status st = checks.getPaymentCheckStatus(checkId);
         require(st == IPaymentChecks.Status.VOID, "expected VOID status");
         console2.log("OK:", label);
@@ -189,26 +193,38 @@ contract DeployAndSmoke is Script {
         uint256 i = 0;
 
         // LLL-
-        out[i++] = LETTERS[x % 24]; x /= 24;
-        out[i++] = LETTERS[x % 24]; x /= 24;
-        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
         out[i++] = 0x2d;
 
         // NNNN
-        out[i++] = DIGITS[x % 8]; x /= 8;
-        out[i++] = DIGITS[x % 8]; x /= 8;
-        out[i++] = DIGITS[x % 8]; x /= 8;
-        out[i++] = DIGITS[x % 8]; x /= 8;
+        out[i++] = DIGITS[x % 8];
+        x /= 8;
+        out[i++] = DIGITS[x % 8];
+        x /= 8;
+        out[i++] = DIGITS[x % 8];
+        x /= 8;
+        out[i++] = DIGITS[x % 8];
+        x /= 8;
 
         // LL-
-        out[i++] = LETTERS[x % 24]; x /= 24;
-        out[i++] = LETTERS[x % 24]; x /= 24;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
         out[i++] = 0x2d;
 
         // LLNN
-        out[i++] = LETTERS[x % 24]; x /= 24;
-        out[i++] = LETTERS[x % 24]; x /= 24;
-        out[i++] = DIGITS[x % 8]; x /= 8;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
+        out[i++] = LETTERS[x % 24];
+        x /= 24;
+        out[i++] = DIGITS[x % 8];
+        x /= 8;
         out[i++] = DIGITS[x % 8];
 
         serial = string(out);
